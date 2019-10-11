@@ -2,6 +2,8 @@
 /* eslint-disable no-tabs */
 
 import axios from 'axios';
+import consoleLog from './logger';
+import { GLOBAL_ERROR_MESSAGE } from './constants';
 
 const AjaxFactoryUtil = {
   /**
@@ -24,116 +26,132 @@ const AjaxFactoryUtil = {
         url: options.url,
         json: true,
         headers: options.headers,
-        data: options.data
+        data: options.data,
       };
-      console.info('Initiating Request for for API call:\n', configuration.url);
+      consoleLog.info(
+        'Initiating Request for for API call:\n',
+        configuration.url,
+      );
       if (!options.headers) {
         delete configuration.headers;
       }
       axios(configuration).then(
-        response => {
+        (response) => {
           const { data: dataFromResponse, status, error } = response;
           if (dataFromResponse) {
-            console.info(
+            consoleLog.info(
               'Request for API call:\n',
               configuration.url,
               'Completed with Status Code:',
-              response.status
+              response.status,
             );
-            console.info(
+            consoleLog.info(
               'Request Headers for API call:',
               configuration.url,
               '\n',
               configuration.headers,
               '\n Response Headers for same are:\n',
               response.headers,
-              '\n'
+              '\n',
             );
             const endTime = new Date().getTime();
             const delta = endTime - startTime;
             if (delta > 500) {
-              console.warn(
-                `Warning: ALERT: API Took more than 0.5 seconds !!! API call for: ${configuration.url} took : ${delta} milliseconds`
+              consoleLog.warn(
+                `Warning: ALERT: API Took more than 0.5 seconds !!! API call for: ${
+                  configuration.url
+                } took : ${delta} milliseconds`,
               );
             }
-            const responseObject = {
-              data: dataFromResponse.data,
-              status: dataFromResponse.status
-            };
             // eslint-disable-next-line no-prototype-builtins
-            const { error: isError } =
-              dataFromResponse.hasOwnProperty('status') &&
-              dataFromResponse.status;
-            if (!isError) {
-              responseObject.ajaxRequestStatus = 'SUCCESS';
-            } else {
-              responseObject.ajaxRequestStatus = 'FAILURE';
-            }
+            const apiStatus = dataFromResponse.hasOwnProperty('status') && dataFromResponse.status;
+            const { success: isSuccessful } = apiStatus;
+            const { data, content, vzwDL } = dataFromResponse;
+            const responseObject = {
+              data,
+              status: apiStatus,
+              content,
+              vzwDL,
+              ajaxRequestStatus: isSuccessful ? 'SUCCESS' : 'FAILURE',
+            };
             return resolve({
-              body: responseObject
+              body: responseObject,
             });
           }
           if (status === 204) {
-            console.info(
+            consoleLog.info(
               'API for',
               configuration.url,
               'with Status Code:',
-              status || ''
+              status || '',
             );
             return resolve({
-              body: status
+              body: status,
             });
           }
-          console.info('Promise is about to be rejected with the error data');
-          console.error(
+          consoleLog.info(
+            'Promise is about to be rejected with the error data',
+          );
+          consoleLog.error(
             'API for',
             configuration.url,
             'failed with Status Code:',
             status || '',
             'error object is:',
-            error || "API Response didn't come with 'data' attribute"
+            error || "API Response didn't come with 'data' attribute",
           );
           // eslint-disable-next-line prefer-promise-reject-errors
           return reject({
             // eslint-disable-next-line no-undef
-            body: responseObject
+            body: {
+              status,
+              error,
+              ajaxRequestStatus: 'FAILURE',
+            },
           });
         },
-        error => {
+        (error) => {
+          const responseObject = {
+            ajaxRequestStatus: 'FAILURE',
+          };
           const { config, response, message } = error;
           if (config) {
-            console.error('Error Happened for API Req:', config.url);
-            console.error('Request Headers for API were:', config.headers);
+            consoleLog.error('Error Happened for API Req:', config.url);
+            consoleLog.error('Request Headers for API were:', config.headers);
           }
           if (config && response) {
             // The request was made and the server responded with a status code
             // that falls out of the range of 2xx
             const { status, headers } = response;
-            console.error('Response status code is ', status);
-            console.error('Response Headers are: \n', headers || '');
+            consoleLog.error('Response status code is ', status);
+            consoleLog.error('Response Headers are: \n', headers || '');
           } else {
             // The request was made but no response was received
-            // `error.request` is an instance of XMLHttpRequest in the browser
-            console.error(
+            // `error.request` is an instance of XMLHttpRequest in the browser and http client request in node
+            consoleLog.error(
               'The request was made but no response was received and the error is',
-              message
+              message,
             );
           }
           // const errorResponse = error && error.response;
           // Return the error object to display call failure message
-          const responseObject = {
-            ajaxRequestStatus: 'FAILURE',
-            response
-          };
-          console.info('Promise is about to be rejected with the error data');
+          consoleLog.info(
+            'Promise is about to be rejected with the error data',
+          );
+          // TODO: assess if this is needed for any use cases
+          // responseObject.response = response;
+          responseObject.status = response && response.status;
+          responseObject.message = message;
+          responseObject.niceMessage = GLOBAL_ERROR_MESSAGE;
+
           // eslint-disable-next-line prefer-promise-reject-errors
           return reject({
-            body: responseObject
+            body: responseObject,
           });
-        }
+        },
       );
     });
-  }
+  },
 };
 
 export default AjaxFactoryUtil;
